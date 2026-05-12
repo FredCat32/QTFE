@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -9,17 +10,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { AIRCRAFT_TYPES, ORGANIZATIONS, MOCK_PROCEDURE } from '@/lib/mockData'
+import { AIRCRAFT_TYPES, DOCUMENT_TYPES } from '@/lib/constants'
 
 export default function UploadPage() {
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
 
   const [selectedFile, setSelectedFile] = useState(null)
-  const [aircraftType, setAircraftType] = useState('')
+  const [planeType, setPlaneType] = useState('')
+  const [documentType, setDocumentType] = useState('')
   const [organizationId, setOrganizationId] = useState('')
   const [status, setStatus] = useState('idle') // idle | uploading | processing | done | error
+  const [errorMessage, setErrorMessage] = useState(null)
   const [dragOver, setDragOver] = useState(false)
+
+  const { data: organizations = [] } = useQuery({
+    queryKey: ['organizations'],
+    queryFn: () => fetch('http://localhost:3001/organizations').then((r) => r.json()),
+  })
 
   function handleFileChange(e) {
     const file = e.target.files?.[0]
@@ -46,30 +54,42 @@ export default function UploadPage() {
     setDragOver(false)
   }
 
-  const canSubmit = selectedFile && aircraftType && organizationId && status === 'idle'
+  const canSubmit = selectedFile && planeType && documentType && organizationId && (status === 'idle' || status === 'error')
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!canSubmit) return
 
-    // Simulate the upload + processing pipeline with mock delays
     setStatus('uploading')
-    await delay(1000)
 
-    setStatus('processing')
-    await delay(2500)
+    const formData = new FormData()
+    formData.append('pdf', selectedFile)
+    formData.append('planeType', planeType)
+    formData.append('documentType', documentType)
+    formData.append('organizationId', organizationId)
 
-    // Store mock result and navigate to review
-    sessionStorage.setItem('procedureResult', JSON.stringify({
-      ...MOCK_PROCEDURE,
-      aircraftType: AIRCRAFT_TYPES.find(a => a.value === aircraftType)?.label,
-      sourcePdfName: selectedFile.name,
-      organizationId,
-    }))
+    try {
+      setStatus('processing')
+      const response = await fetch('http://localhost:3001/upload', {
+        method: 'POST',
+        body: formData,
+      })
 
-    setStatus('done')
-    await delay(300)
-    navigate('/review')
+      if (!response.ok) {
+        const { error } = await response.json()
+        throw new Error(error || 'Upload failed')
+      }
+
+      const result = await response.json()
+      sessionStorage.setItem('procedureResult', JSON.stringify(result))
+
+      setStatus('done')
+      navigate('/review')
+    } catch (err) {
+      console.error(err)
+      setErrorMessage(err.message)
+      setStatus('error')
+    }
   }
 
   return (
@@ -133,7 +153,7 @@ export default function UploadPage() {
               {/* Aircraft type */}
               <div className="space-y-1">
                 <label className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Aircraft Type</label>
-                <Select value={aircraftType} onValueChange={setAircraftType}>
+                <Select value={planeType} onValueChange={setPlaneType}>
                   <SelectTrigger className="border-border bg-input rounded-none h-9 text-sm">
                     <SelectValue placeholder="Select aircraft type" />
                   </SelectTrigger>
@@ -145,16 +165,33 @@ export default function UploadPage() {
                 </Select>
               </div>
 
+              {/* Document type */}
+              <div className="space-y-1">
+                <label className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Document Type</label>
+                <Select value={documentType} onValueChange={setDocumentType}>
+                  <SelectTrigger className="border-border bg-input rounded-none h-9 text-sm">
+                    <SelectValue placeholder="Select document type" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none">
+                    {DOCUMENT_TYPES.map((d) => (
+                      <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Organization */}
               <div className="space-y-1">
                 <label className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Organization</label>
                 <Select value={organizationId} onValueChange={setOrganizationId}>
                   <SelectTrigger className="border-border bg-input rounded-none h-9 text-sm">
-                    <SelectValue placeholder="Select organization" />
+                    <SelectValue placeholder="Select organization">
+                      {organizations.find(o => o.id === organizationId)?.name}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent className="rounded-none">
-                    {ORGANIZATIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    {organizations.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -171,12 +208,17 @@ export default function UploadPage() {
                 {status === 'processing' && 'Parsing Procedure...'}
                 {status === 'idle' && 'Parse Procedure'}
                 {status === 'done' && 'Done'}
+                {status === 'error' && 'Error — Try Again'}
               </Button>
 
               {status === 'processing' && (
                 <p className="text-xs text-center text-muted-foreground font-mono">
                   AI extraction in progress — this may take a minute.
                 </p>
+              )}
+
+              {status === 'error' && errorMessage && (
+                <p className="text-xs text-center text-destructive font-mono">{errorMessage}</p>
               )}
             </form>
           </div>

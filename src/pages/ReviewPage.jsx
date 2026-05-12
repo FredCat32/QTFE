@@ -24,6 +24,26 @@ export default function ReviewPage() {
     )
   }
 
+  if (procedure.status === 'docling_only') {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="border-b border-border px-6 py-3 flex items-center justify-between">
+          <span className="text-xs font-mono text-primary tracking-widest uppercase">QuickTurn — Docling Output</span>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/upload')} className="rounded-none font-mono text-xs uppercase tracking-widest text-muted-foreground h-7 px-2">
+            &larr; New Upload
+          </Button>
+        </div>
+        <div className="max-w-3xl mx-auto px-6 py-6 space-y-3">
+          <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Source: {procedure.sourcePdfName}</p>
+          <p className="text-xs font-mono text-yellow-500">GPU EC2 not connected — showing raw Docling markdown</p>
+          <pre className="text-xs font-mono text-foreground bg-muted/30 border border-border p-4 whitespace-pre-wrap leading-relaxed">
+            {procedure.markdown}
+          </pre>
+        </div>
+      </div>
+    )
+  }
+
   async function handleApprove() {
     setImportStatus('loading')
     // TODO: wire up GraphQL mutation importProcedure
@@ -57,7 +77,7 @@ export default function ReviewPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{procedure.title}</h1>
           <p className="text-xs text-muted-foreground font-mono mt-1">
-            {procedure.aircraftType} &nbsp;/&nbsp; {procedure.sourcePdfName}
+            {procedure.planeType} &nbsp;/&nbsp; {procedure.sourcePdfName}
           </p>
         </div>
 
@@ -75,7 +95,7 @@ export default function ReviewPage() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">Aircraft</p>
-                <p className="text-sm font-medium">{procedure.aircraftType}</p>
+                <p className="text-sm font-medium">{procedure.planeType}</p>
               </div>
               <div>
                 <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-1">Steps</p>
